@@ -1,0 +1,14 @@
+{
+  "name": "Crowd Runner 65 Niveles",
+  "short_name": "Crowd Runner",
+  "description": "Runner hipercasual: multiplica tu ejército, pásale las hordas por encima y derrota al jefe en 65 niveles.",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#0b1020",
+  "theme_color": "#1d4ed8",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

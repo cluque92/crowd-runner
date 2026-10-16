@@ -1,0 +1,1820 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1d4ed8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Crowd Runner 65 niveles</title>
+<style>
+  /* ============ Estilos generales ============ */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body { height:100%; overflow:hidden; background:#0b1020; font-family:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #game { display:block; width:100vw; height:100vh; touch-action:none; cursor:grab; }
+  #game:active { cursor:grabbing; }
+
+  /* ============ HUD ============ */
+  #hud { position:fixed; top:10px; left:0; right:0; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; z-index:5; }
+  #counter {
+    display:flex; align-items:center; gap:10px;
+    background:linear-gradient(180deg, #3b82f6, #1d4ed8); color:#fff;
+    padding:5px 24px 7px; border-radius:999px;
+    font-size:clamp(26px, 6vw, 42px); font-weight:900;
+    text-shadow:0 3px 0 rgba(10,20,50,.4);
+    box-shadow:0 5px 16px rgba(29,78,216,.45), inset 0 2px 0 rgba(255,255,255,.35);
+    border:2px solid rgba(255,255,255,.4);
+  }
+  #counter.pulse { animation:pulse .22s ease; }
+  @keyframes pulse { 45% { transform:scale(1.14); } }
+  #bar { width:min(70vw, 380px); height:8px; background:rgba(255,255,255,.25); border-radius:999px; overflow:hidden; }
+  #bar i { display:block; height:100%; width:0%; background:#22c55e; border-radius:999px; transition:width .1s linear; }
+
+  /* ============ Overlays (título / victoria / derrota) ============ */
+  #overlay {
+    position:fixed; inset:0; z-index:10;
+    display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(ellipse at center, rgba(15,25,50,.72), rgba(5,8,20,.9));
+    backdrop-filter:blur(3px);
+    transition:opacity .25s ease;
+  }
+  #overlay.hidden { opacity:0; pointer-events:none; }
+  #ovCard {
+    text-align:center; color:#fff;
+    padding:26px 26px 24px;
+    width:min(92vw, 400px);
+    background:linear-gradient(160deg, rgba(32,44,84,.96), rgba(15,22,46,.96));
+    border-radius:24px;
+    border:2px solid rgba(255,255,255,.14);
+    box-shadow:0 24px 60px rgba(0,0,0,.55);
+    animation:pop .35s cubic-bezier(.2,.9,.3,1.2);
+  }
+  @keyframes pop { from { transform:translateY(20px) scale(.94); opacity:0; } }
+  #ovTitle {
+    font-size:clamp(32px, 8vw, 50px); font-weight:900; letter-spacing:2px;
+    background:linear-gradient(180deg, #ffffff, #9cc3ff);
+    -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; color:transparent;
+  }
+  #ovTitle.win  { background-image:linear-gradient(180deg, #c8ffd9, #22c55e); }
+  #ovTitle.lose { background-image:linear-gradient(180deg, #ffc9c9, #ef4444); }
+  #ovSub  { color:#a9c2ef; font-size:clamp(13px, 3.4vw, 16px); font-weight:700; margin:8px 0 4px; }
+  .how { display:grid; gap:8px; margin:16px 0 18px; text-align:left; }
+  .how div {
+    display:flex; gap:10px; align-items:center;
+    background:rgba(255,255,255,.07);
+    border:1px solid rgba(255,255,255,.08);
+    padding:9px 12px; border-radius:12px;
+    font-size:clamp(12px, 3.2vw, 14px); color:#dbe7ff; line-height:1.35;
+  }
+  .how .e { font-size:20px; flex:0 0 auto; }
+  .how b { color:#fff; }
+  .btnRow { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  #ovBtn {
+    font-size:clamp(18px, 4.6vw, 23px); font-weight:900; color:#231a02;
+    background:linear-gradient(180deg, #ffe066, #f59e0b);
+    border:none; border-radius:999px;
+    padding:13px 40px; cursor:pointer;
+    box-shadow:0 6px 0 #92610a, 0 12px 30px rgba(245,158,11,.35);
+    transition:transform .1s ease, box-shadow .1s ease;
+    letter-spacing:1px;
+  }
+  #ovBtn:hover { transform:translateY(-2px); box-shadow:0 8px 0 #92610a, 0 16px 34px rgba(245,158,11,.45); }
+  #ovBtn:active { transform:translateY(4px); box-shadow:0 2px 0 #92610a; }
+  #ovBtn2 {
+    font-size:clamp(16px, 4vw, 20px); font-weight:900; color:#dbe7ff;
+    background:rgba(255,255,255,.12);
+    border:2px solid rgba(255,255,255,.25); border-radius:999px;
+    padding:12px 28px; cursor:pointer;
+    transition:transform .1s ease, background .1s ease;
+  }
+  #ovBtn2:hover { transform:translateY(-2px); background:rgba(255,255,255,.2); }
+  #ovNote { font-size:12px; color:#8fa8d8; margin-top:14px; }
+
+  /* ============ Mapa de niveles ============ */
+  #map {
+    position:fixed; inset:0; z-index:30;
+    display:flex; align-items:center; justify-content:center; gap:14px; flex-direction:column;
+    background:radial-gradient(ellipse at center, rgba(15,25,50,.8), rgba(5,8,20,.94));
+    backdrop-filter:blur(3px);
+  }
+  #map.hidden { display:none; }
+  #board {
+    position:relative;
+    width:min(94vw, 470px); height:min(80vh, 780px);
+    background:linear-gradient(160deg, rgba(32,44,84,.97), rgba(15,22,46,.97));
+    border-radius:26px; border:2px solid rgba(255,255,255,.14);
+    box-shadow:0 24px 60px rgba(0,0,0,.6);
+    padding:52px 14px 14px;
+  }
+  #boardScroll { position:absolute; inset:52px 14px 14px; overflow-y:auto; overflow-x:hidden;
+    -webkit-overflow-scrolling:touch; }
+  #boardScroll::-webkit-scrollbar { width:6px; }
+  #boardScroll::-webkit-scrollbar-thumb { background:rgba(255,255,255,.25); border-radius:3px; }
+  #mapTitle { position:absolute; top:12px; left:0; right:0; text-align:center;
+    font-weight:900; letter-spacing:2px; font-size:clamp(20px, 5vw, 28px);
+    background:linear-gradient(180deg, #fff, #9cc3ff);
+    -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; color:transparent; }
+  #mapSvg, #nodes { position:absolute; inset:0; }
+  #mapSvg { width:100%; height:100%; pointer-events:none; }
+  .node {
+    position:absolute; width:44px; height:44px; margin:-22px 0 0 -22px;
+    border-radius:50%; border:2.5px solid rgba(255,255,255,.3);
+    font-weight:900; font-size:17px; color:#fff; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition:transform .12s ease;
+  }
+  .node:hover { transform:scale(1.12); }
+  .node small { position:absolute; bottom:-14px; font-size:9px; font-weight:700; color:#9cc3ff; white-space:nowrap; }
+  .node.done { background:linear-gradient(180deg,#34d399,#16a34a); box-shadow:0 6px 16px rgba(22,163,74,.5); }
+  .node.cur  { background:linear-gradient(180deg,#fde047,#f59e0b); color:#231a02; border-color:#fff;
+               animation:nodePulse 1.2s ease infinite; }
+  .node.lock { background:rgba(51,58,90,.9); color:#5b6899; border-color:rgba(255,255,255,.15); cursor:not-allowed; }
+  .node.lock:hover { transform:none; }
+  @keyframes nodePulse { 50% { transform:scale(1.12); box-shadow:0 0 22px rgba(250,204,21,.75); } }
+  #mapBack {
+    font-size:16px; font-weight:900; color:#dbe7ff;
+    background:rgba(255,255,255,.12);
+    border:2px solid rgba(255,255,255,.25); border-radius:999px;
+    padding:10px 26px; cursor:pointer;
+  }
+  #mapBack:hover { background:rgba(255,255,255,.2); }
+
+  /* ============ Pausa flotante ============ */
+  #pauseBtn {
+    position:fixed; top:14px; right:14px; z-index:8;
+    width:52px; height:52px; border-radius:14px;
+    border:2px solid rgba(255,255,255,.35);
+    background:rgba(15,25,50,.65); color:#fff;
+    font-size:22px; cursor:pointer; backdrop-filter:blur(2px);
+  }
+  #pauseBtn:hover { background:rgba(30,50,90,.75); }
+  #pauseBtn.hidden { display:none; }
+
+  /* ============ Login de usuarios ============ */
+  #login {
+    position:fixed; inset:0; z-index:35;
+    display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(ellipse at center, rgba(15,25,50,.8), rgba(5,8,20,.94));
+    backdrop-filter:blur(3px);
+  }
+  #login.hidden { display:none; }
+  #loginCard {
+    text-align:center; color:#fff;
+    padding:26px 26px 22px;
+    width:min(92vw, 380px);
+    background:linear-gradient(160deg, rgba(32,44,84,.97), rgba(15,22,46,.97));
+    border-radius:24px; border:2px solid rgba(255,255,255,.14);
+    box-shadow:0 24px 60px rgba(0,0,0,.55);
+    animation:pop .3s cubic-bezier(.2,.9,.3,1.2);
+  }
+  #loginTitle { font-weight:900; letter-spacing:2px; font-size:26px;
+    background:linear-gradient(180deg, #fff, #9cc3ff);
+    -webkit-background-clip:text; background-clip:text;
+    -webkit-text-fill-color:transparent; color:transparent; }
+  #nameInput {
+    width:100%; padding:12px; margin:14px 0 10px;
+    border-radius:12px; border:2px solid rgba(255,255,255,.25);
+    background:rgba(0,0,0,.3); color:#fff;
+    font-size:18px; font-weight:700; text-align:center; outline:none;
+  }
+  #nameInput:focus { border-color:#fde047; }
+  #loginGo, #loginGuest, #loginBack, #ovBtn3 {
+    display:block; width:100%; margin-top:10px;
+    border-radius:999px; border:none; cursor:pointer;
+    font-weight:900; font-size:16px; padding:11px;
+  }
+  #loginGo { background:linear-gradient(180deg, #ffe066, #f59e0b); color:#231a02;
+    box-shadow:0 4px 0 #92610a; }
+  #loginGo:active { transform:translateY(2px); box-shadow:0 2px 0 #92610a; }
+  #loginBack { background:rgba(255,255,255,.12); color:#dbe7ff; }
+  #userList { display:grid; gap:7px; margin:12px 0 4px; max-height:30vh; overflow-y:auto; }
+  .userChip {
+    display:flex; align-items:center; justify-content:space-between;
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14);
+    border-radius:12px; padding:9px 13px; cursor:pointer; color:#dbe7ff;
+    font-weight:700; font-size:14px; text-align:left;
+  }
+  .userChip:hover { background:rgba(255,255,255,.16); }
+  .userChip small { color:#9cc3ff; font-weight:600; }
+  #ovBtn3.ghost, #loginGuest.ghost {
+    background:rgba(255,255,255,.14); color:#dbe7ff;
+    border:2px solid rgba(255,255,255,.22);
+  }
+  #ovBtn3 { width:auto; padding:10px 22px; }
+  #ovBtn3 { display:none; }   /* solo se muestra en el título */
+
+  /* ============ Transición entre niveles ============ */
+  #wipe {
+    position:fixed; inset:0; z-index:40; pointer-events:none;
+    background:linear-gradient(180deg, #0b1020 0%, #1d4ed8 55%, #0b1020 100%);
+    transform:translateY(-101%);
+  }
+  #wipe.on { animation:wipeAnim .6s cubic-bezier(.6,.05,.4,.95); }
+  @keyframes wipeAnim {
+    0%   { transform:translateY(-101%); }
+    42%  { transform:translateY(0); }
+    58%  { transform:translateY(0); }
+    100% { transform:translateY(101%); }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<!-- HUD: contador de tropas + barra de progreso + nivel actual -->
+<div id="hud">
+  <div id="counter"><span class="icon">👥</span><b id="cnum">0</b></div>
+  <div id="bar"><i id="barfill"></i></div>
+</div>
+
+<!-- Overlay de título / victoria / derrota -->
+<div id="overlay">
+  <div id="ovCard">
+    <h1 id="ovTitle">CROWD RUNNER</h1>
+    <p id="ovSub">Nivel 1 · multiplica tu ejército</p>
+    <div class="how">
+      <div><span class="e">👆</span><span><b>Arrastra</b> para moverte (o flechas / A-D). No sales del asfalto.</span></div>
+      <div><span class="e">🚪</span><span>Puertas <b style="color:#4ade80">+</b> y <b style="color:#4ade80">x</b> multiplican; <b style="color:#f87171">−</b> y <b style="color:#f87171">÷</b> reducen.</span></div>
+      <div><span class="e">🔴</span><span>Las <b>hordas</b> restan tropas al contacto: esquívalas por los lados.</span></div>
+      <div><span class="e">👑</span><span>Cada nivel acaba con un <b style="color:#fde047">JEFE</b>: ahí se activan tus balas.</span></div>
+      <div><span class="e">🗺️</span><span>Supera niveles para desbloquear el <b>mapa de 65 niveles</b>.</span></div>
+    </div>
+    <div class="btnRow">
+      <button id="ovBtn">▶&nbsp;&nbsp;JUGAR</button>
+      <button id="ovBtn2">MAPA</button>
+      <button id="ovBtn3" class="ghost">👤</button>
+    </div>
+    <p id="ovNote">Consejo: cuanta más tropa, más balas por andanada contra el jefe.</p>
+  </div>
+</div>
+
+<!-- Pausa flotante -->
+<button id="pauseBtn" class="hidden">⏸</button>
+
+<!-- Login de usuarios -->
+<div id="login" class="hidden">
+  <div id="loginCard">
+    <h2 id="loginTitle">USUARIO</h2>
+    <input id="nameInput" maxlength="12" placeholder="Tu nombre" autocomplete="off">
+    <button id="loginGo">ENTRAR / CREAR</button>
+    <div id="userList"></div>
+    <button id="loginGuest" class="ghost">JUGAR COMO INVITADO</button>
+    <button id="loginBack">⬅&nbsp;VOLVER</button>
+  </div>
+</div>
+
+<!-- Mapa de niveles -->
+<div id="map" class="hidden">
+  <div id="board">
+    <h2 id="mapTitle">ELIGE NIVEL</h2>
+    <div id="boardScroll">
+      <svg id="mapSvg" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+      <div id="nodes"></div>
+    </div>
+  </div>
+  <button id="mapBack">⬅&nbsp;VOLVER</button>
+</div>
+
+<!-- Cortinilla de transición -->
+<div id="wipe"></div>
+
+<script>
+
+"use strict";
+/* ==================================================================
+   CROWD RUNNER — campaña de 15 niveles (Canvas 2D + JS vanilla)
+   Requiere: arrancar con doble clic en este archivo.
+   Sistemas: niveles con config escalada, sprites horneados,
+   puertas/hordas aleatorias, jefe final, mapa con progreso.
+   ================================================================== */
+
+/* ==================== 1. CONFIG base ==================== */
+const CONFIG = {
+  roadHalf:     1.55,
+  startCount:   1,
+  maxCount:     150,
+
+  fireInterval: 0.18,
+  shootRange:   30,
+  bulletSpeed:  50,
+
+  maxRender:   60,
+  camDist:     8.5,
+  camBack:     5,
+  horizonFrac: 0.25,
+  baseFrac:    0.86,
+};
+
+/* Campaña: los primeros 15 niveles son el "tutorial" y luego 50 más,
+   organizados en capítulos de 15 (la dificultad vuelve a subir). */
+const N_LEVELS = 65;
+
+/* ==================== 2. Utilidades ==================== */
+const rand  = (a, b) => a + Math.random() * (b - a);
+const randi = (a, b) => Math.floor(rand(a, b + 1));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp  = (a, b, t) => a + (b - a) * t;
+const GOLD  = 2.399963229;
+const TAU   = Math.PI * 2;
+
+/* ==================== 3. Canvas y vista ==================== */
+const canvas = document.getElementById("game");
+const ctx    = canvas.getContext("2d");
+let W = 0, H = 0, cx = 0, horizonY = 0, baseY = 0, pxPerUnit = 0;
+let skyGrad = null, grassGrad = null, roadGrad = null, fogGrad = null;
+let ATM = null;
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width  = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width  = W + "px";
+  canvas.style.height = H + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx        = W / 2;
+  horizonY  = H * CONFIG.horizonFrac;
+  baseY     = H * CONFIG.baseFrac;
+  pxPerUnit = (W * 0.46) / CONFIG.roadHalf;
+  skyGrad   = ctx.createLinearGradient(0, 0, 0, horizonY + 40);
+  ATM.sky.forEach((c, i) => skyGrad.addColorStop(i / (ATM.sky.length - 1), c));
+  grassGrad = ctx.createLinearGradient(0, horizonY, 0, H);
+  grassGrad.addColorStop(0, ATM.grass[0]);
+  grassGrad.addColorStop(1, ATM.grass[1]);
+  roadGrad  = ctx.createLinearGradient(0, horizonY, 0, H);
+  roadGrad.addColorStop(0, ATM.road[0]);
+  roadGrad.addColorStop(1, ATM.road[1]);
+  fogGrad   = ctx.createLinearGradient(0, horizonY - 22, 0, horizonY + 80);
+  fogGrad.addColorStop(0, `rgba(${ATM.fog},${ATM.fogA * 0.8})`);
+  fogGrad.addColorStop(0.45, `rgba(${ATM.fog},${ATM.fogA})`);
+  fogGrad.addColorStop(1, `rgba(${ATM.fog},0)`);
+}
+window.addEventListener("resize", resize);
+
+/* Atmósferas por tramo de campaña (mañana → atardecer → noche → alba → dorado) */
+const PRESETS = {
+  day: {
+    sky:["#2b4f96","#7fb0ec","#d7e9ff"], grass:["#55a04e","#2f6530"],
+    fog:"214,228,244", fogA:.5, sun:"#fff3c4", stars:false, moon:false,
+    road:["#8a95a1","#484f59"], hills:["#2c6334","#3d8b44"],
+    cloud:"rgba(255,255,255,.85)", crowns:[112, 30], flowers:true,
+  },
+  sunset: {
+    sky:["#3d2a66","#c25b8e","#ffb36b"], grass:["#3f7a44","#24502a"],
+    fog:"255,190,150", fogA:.55, sun:"#ffd27a", stars:false, moon:false,
+    road:["#7d7a86","#3c3945"], hills:["#274d31","#356a3c"],
+    cloud:"rgba(255,225,235,.75)", crowns:[105, 26], flowers:true,
+  },
+  night: {
+    sky:["#04081c","#0d1b3e","#24406e"], grass:["#1d4527","#102417"],
+    fog:"110,140,205", fogA:.32, sun:null, stars:true, moon:true,
+    road:["#59626d","#2c323b"], hills:["#10301d","#173a26"],
+    cloud:"rgba(160,180,220,.35)", crowns:[125, 22], flowers:false,
+  },
+  dawn: {
+    sky:["#1a2a5e","#7c6bb0","#ffc9a3"], grass:["#33653c","#1e3f26"],
+    fog:"240,200,190", fogA:.45, sun:"#ffe0b8", stars:true, moon:false,
+    road:["#7b7a8b","#363544"], hills:["#22472c","#2f6338"],
+    cloud:"rgba(255,220,235,.65)", crowns:[95, 27], flowers:false,
+  },
+  golden: {
+    sky:["#2a6ad4","#8fc3ff","#ffe9b8"], grass:["#63b354","#2f7a3a"],
+    fog:"235,240,215", fogA:.4, sun:"#fff9e0", stars:false, moon:false,
+    road:["#98a0aa","#50565f"], hills:["#2f7740","#3f9a52"],
+    cloud:"rgba(255,255,255,.9)", crowns:[100, 34], flowers:true,
+  },
+};
+const ATM_ORDER = [PRESETS.day, PRESETS.sunset, PRESETS.night, PRESETS.dawn, PRESETS.golden];
+function atmoFor(n) { return ATM_ORDER[Math.min(ATM_ORDER.length - 1, Math.floor((n - 1) / 13))]; }
+function applyAmbiance(n) {
+  ATM = atmoFor(n);
+  ATM.starsArr = null;
+  if (ATM.stars) {
+    ATM.starsArr = [];
+    for (let i = 0; i < 70; i++) ATM.starsArr.push({ x: Math.random(), y: Math.random() * 0.9, tw: rand(2, 6), ph: rand(0, TAU) });
+  }
+  resize();
+}
+
+/* ==================== 4. Audio ==================== */
+let audioCtx = null;
+function initAudio() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+  }
+  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+}
+function tone(f0, f1, dur, type, vol) {
+  if (!audioCtx) return;
+  const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+  o.type = type || "triangle";
+  o.frequency.setValueAtTime(f0, audioCtx.currentTime);
+  o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), audioCtx.currentTime + dur);
+  g.gain.setValueAtTime(vol || 0.15, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  o.connect(g).connect(audioCtx.destination);
+  o.start(); o.stop(audioCtx.currentTime + dur);
+}
+const sfx = {
+  start:    () => { tone(520, 780, 0.12, "triangle", 0.16); setTimeout(() => tone(780, 1180, 0.16, "triangle", 0.16), 120); },
+  gateGood: () => { tone(440, 880, 0.15, "triangle", 0.18); tone(660, 1320, 0.15, "triangle", 0.08); },
+  gateBad:  () => tone(220, 90, 0.3, "sawtooth", 0.15),
+  shoot:    () => { tone(950, 240, 0.06, "square", 0.05); tone(1500, 500, 0.04, "triangle", 0.03); },
+  hitBoss:  () => tone(1400, 850, 0.035, "triangle", 0.05),
+  boom:     () => { tone(180, 40, 0.25, "square", 0.2); tone(90, 30, 0.3, "sawtooth", 0.12); },
+  win:      () => [0, 120, 240, 400].forEach((d, i) => setTimeout(() => tone(440 * Math.pow(1.25, i), 880 * Math.pow(1.25, i), 0.18, "triangle", 0.16), d)),
+  lose:     () => { tone(300, 70, 0.6, "sawtooth", 0.2); tone(150, 40, 0.7, "square", 0.12); },
+};
+
+/* ==================== 5. Estado, niveles y progreso ==================== */
+const S = { TITLE: "title", MAP: "map", TRANSITION: "trans", PLAY: "play", WIN: "win", LOSE: "lose" };
+let state = S.TITLE;
+let LV = {};
+/* Dificultad EXPONENCIAL: tus puertas multiplican la tropa, así que las
+   hordas y el jefe crecen con el mismo estilo (×1.25 / ×1.3 por nivel). */
+function levelCfg(n) {
+  const t = n - 1;
+  const gateMin = Math.min(20, Math.max(7, Math.round(10 + t * 0.8)));
+  return {
+    len: Math.round(380 + Math.min(t, 45) * 30),
+    speed: Math.min(23, 10 * Math.pow(1.028, t)),
+    segMin: Math.max(11, 20 - t * 0.6),
+    segMax: Math.max(18, 28 - t * 0.75),
+    gateMin,
+    gateMax: Math.min(80, Math.round(gateMin * (2.0 + 0.15 * t))),
+    hordeBase: Math.min(65, 7 + Math.round(t * 1.4)),
+    boss: Math.min(80, 20 + Math.round(t * 1.3)),
+    volley: Math.min(18, 6 + Math.floor(t / 3)),
+  };
+}
+const V1_KEY = "crowdRunner.v1";
+const USER_KEY = "crowdRunner.users.v2";
+let profiles = {};
+let currentUser = "__invitado";
+
+function saveProgress() {
+  profiles[currentUser] = { unlocked: progress.unlocked, best: progress.best };
+  try { localStorage.setItem(USER_KEY, JSON.stringify({ profiles, current: currentUser })); } catch (e) {}
+}
+function loadProgress() {
+  try {
+    const db = JSON.parse(localStorage.getItem(USER_KEY) || "null");
+    if (db && db.profiles) {
+      profiles = db.profiles;
+      currentUser = db.current || "__invitado";
+    } else {
+      let old = null;
+      try { old = JSON.parse(localStorage.getItem(V1_KEY) || "null"); } catch (e) {}
+      if (old && old.unlocked) profiles["Invitado"] = { unlocked: old.unlocked, best: old.best || {} };
+    }
+  } catch (e) {}
+  profiles.__invitado = profiles.__invitado || { unlocked: 1, best: {} };
+  if (!profiles[currentUser]) currentUser = "__invitado";
+  applyProfile();
+}
+function applyProfile() {
+  const p = profiles[currentUser];
+  progress = { unlocked: clamp(p.unlocked, 1, N_LEVELS), best: p.best || {} };
+}
+function switchUser(name) {
+  saveProgress();
+  currentUser = name || "__invitado";
+  profiles[currentUser] = profiles[currentUser] || { unlocked: 1, best: {} };
+  applyProfile();
+  saveProgress();
+}
+const currentLevel = () => Math.min(progress.unlocked, N_LEVELS);
+function guestLabel() { return currentUser === "__invitado" ? "INVITADO" : currentUser; }
+let px = 0, pz = 0, prevPz = 0;
+let count = CONFIG.startCount, displayCount = count;
+let fireTimer = 0, lastHitSnd = 0, shakeT = 0, time = 0;
+let progress = { unlocked: 1, best: {} };
+let banner = null;
+let level = 1;
+
+const gates = [], enemies = [], bullets = [], particles = [], floats = [];
+const cnumEl    = document.getElementById("cnum");
+const barEl     = document.getElementById("barfill");
+const counterEl = document.getElementById("counter");
+let lastShownCount = -1;
+
+/* ==================== 6. Sprites horneados (muñecos) ====================
+   Cada humanoide se dibuja UNA VEZ por frame de trote (8 frames) a
+   un canvas oculto y luego se estampa con drawImage: mucho más rápido. */
+const PAL_DEFS = [
+  { shirt:"hsl(215,75%,55%)", cap:"hsl(214,65%,26%)", pants:"hsl(220,30%,26%)", shoe:"#2a3245", skin:"#f4c7a1" },
+  { shirt:"hsl(212,72%,50%)", cap:"hsl(210,64%,22%)", pants:"hsl(215,28%,30%)", shoe:"#242c40", skin:"#eab183" },
+  { shirt:"hsl(218,70%,42%)", cap:"hsl(216,62%,18%)", pants:"hsl(222,26%,34%)", shoe:"#262e42", skin:"#c98d5f" },
+  { shirt:"hsl(205,76%,44%)", cap:"hsl(206,60%,17%)", pants:"hsl(218,24%,38%)", shoe:"#2b334a", skin:"#a3714b" },
+  { shirt:"hsl(2,70%,48%)",   cap:"hsl(1,60%,22%)",   pants:"hsl(0,35%,22%)",  shoe:"#3a2020", skin:"#f4c7a1" },
+  { shirt:"hsl(6,66%,44%)",   cap:"hsl(4,58%,19%)",   pants:"hsl(0,32%,20%)",  shoe:"#33201f", skin:"#eab183" },
+  { shirt:"hsl(358,62%,40%)", cap:"hsl(356,56%,17%)", pants:"hsl(2,30%,25%)",  shoe:"#402423", skin:"#8d5a33" },
+  { shirt:"hsl(352,72%,40%)", cap:"hsl(352,70%,16%)", pants:"hsl(352,40%,18%)", shoe:"#2c1414", skin:"#eab183" },
+];
+const SPRITE_FRAMES = 8;
+const SPRITE_SIZE = { w: 40, h: 54, ground: 46, u: 22 };
+const baked = [];
+
+/* Estilo chibi plano: gorra, torso cápsula, patitas que alternan en Z.
+   4 primitivas por frame = sprites baratos y super legibles. */
+function drawHumanoidInto(g, x, y, u, pal, phase) {
+  const s1 = Math.sin(phase);
+  const c1 = Math.cos(phase);
+  const bob = -Math.abs(c1) * u * 0.08;
+  g.fillStyle = "rgba(0,0,0,.16)";
+  g.beginPath();
+  g.ellipse(x, y + u * 0.03, u * 0.36, u * 0.1, 0, 0, TAU);
+  g.fill();
+
+  g.lineCap = "round";
+  g.lineJoin = "round";
+  const legH = u * 0.4;
+  const hipY = y - legH + bob * 0.35;
+  g.strokeStyle = pal.pants;
+  g.lineWidth = u * 0.16;
+  g.beginPath();
+  g.moveTo(x - u * 0.1, hipY);
+  g.lineTo(x - u * 0.1 + s1 * u * 0.06, y - Math.max(0, s1) * u * 0.24);
+  g.stroke();
+  g.beginPath();
+  g.moveTo(x + u * 0.1, hipY);
+  g.lineTo(x + u * 0.1 - s1 * u * 0.06, y - Math.max(0, -s1) * u * 0.24);
+  g.stroke();
+  g.fillStyle = pal.shoe;
+  g.beginPath();
+  g.ellipse(x - u * 0.1 + s1 * u * 0.06, y - Math.max(0, s1) * u * 0.24, u * 0.11, u * 0.07, 0, 0, TAU);
+  g.ellipse(x + u * 0.1 - s1 * u * 0.06, y - Math.max(0, -s1) * u * 0.24, u * 0.11, u * 0.07, 0, 0, TAU);
+  g.fill();
+  const torsoW = u * 0.62, torsoH = u * 0.52;
+  const torsoY = hipY - torsoH;
+  g.fillStyle = pal.shirt;
+  g.strokeStyle = "rgba(20,30,50,.35)";
+  g.lineWidth = Math.max(1, u * 0.055);
+  roundRectInto(g, x - torsoW / 2, torsoY - u * 0.06, torsoW, torsoH, u * 0.28);
+  g.fill(); g.stroke();
+  g.fillStyle = pal.shirt;
+  g.beginPath();
+  g.arc(x - torsoW / 2, torsoY + torsoH * 0.4 + s1 * u * 0.07, u * 0.115, 0, TAU);
+  g.arc(x + torsoW / 2, torsoY + torsoH * 0.4 - s1 * u * 0.07, u * 0.115, 0, TAU);
+  g.fill();
+  const headY = torsoY - u * 0.16;
+  g.fillStyle = pal.cap;
+  g.beginPath();
+  g.arc(x, headY, u * 0.3, 0, TAU);
+  g.fill();
+  g.stroke();
+  g.fillStyle = "rgba(255,255,255,.25)";
+  g.beginPath();
+  g.ellipse(x, headY + u * 0.09, u * 0.25, u * 0.09, 0, 0, TAU);
+  g.fill();
+  g.fillStyle = pal.skin;
+  g.fillRect(x - u * 0.06, torsoY - u * 0.05, u * 0.12, u * 0.14);
+}
+function roundRectInto(g, x, y, w, h, r) {
+  g.beginPath();
+  if (g.roundRect) g.roundRect(x, y, w, h, r);
+  else g.rect(x, y, w, h);
+}
+
+function getFrames(pi) {
+  let set = baked[pi];
+  if (set) return set;
+  set = baked[pi] = [];
+  const S0 = SPRITE_SIZE;
+  for (let f = 0; f < SPRITE_FRAMES; f++) {
+    const c = document.createElement("canvas");
+    c.width = S0.w; c.height = S0.h;
+    const g = c.getContext("2d");
+    drawHumanoidInto(g, S0.w / 2, S0.ground, S0.u, PAL_DEFS[pi], f / SPRITE_FRAMES * TAU);
+    set.push(c);
+  }
+  return set;
+}
+
+/* Estampa el sprite del soldado con el frame correcto del trote */
+function drawSprite(x, y, u, palIdx, phase, pop) {
+  const fr = getFrames(palIdx);
+  const f = Math.floor((((phase / TAU) % 1) + 1) % 1 * SPRITE_FRAMES) % SPRITE_FRAMES;
+  const c = fr[f];
+  const s = (u / SPRITE_SIZE.u) * pop;
+  ctx.drawImage(c, x - SPRITE_SIZE.w / 2 * s, y - SPRITE_SIZE.ground * s, SPRITE_SIZE.w * s, SPRITE_SIZE.h * s);
+}
+
+/* ==================== 7. CrowdManager ==================== */
+function setCount(n) {
+  count = clamp(Math.round(n), 0, CONFIG.maxCount);
+  if (count <= 0 && state === S.PLAY) lose();
+}
+
+/* ==================== FICHAS DE ASSET (escala única en S) ====================
+   S = ancho del soldado en unidades de mundo. TODO lo demás son múltiplos
+   declarados aquí: cambiar una ficha propaga el asset a los 65 niveles. */
+const ASSETS = {
+  S: 0.4,
+  soldier: { u: 0.4 },
+  pitchX: 1.3,
+  pitchZ: 1.55,
+  maxCols: 8,
+  obstacles: {
+    crate:  { w: 1.8, h: 1.7 },
+    rock:   { w: 2.2, h: 1.8 },
+    barrel: { w: 1.2, h: 2.0 },
+    fence:  { w: 3.2, h: 0.9 },
+    cone:   { w: 0.8, h: 1.3 },
+  },
+  penalty: { min: 6, max: 14 },
+  gate:    { wallH: 2.2, fontH: 1.5 },
+  numFont: 1.7,
+  pickup:  { u: 1.3, ring: 1.7 },
+};
+
+/* Retícula ÚNICA compartida por tropa y hordas: nada se dibuja fuera de ella */
+function gridLayout(n) {
+  const rows = clamp(Math.ceil(n / ASSETS.maxCols), 1, 5);
+  const cols = Math.ceil(n / rows);
+  const px = ASSETS.pitchX * ASSETS.S;
+  const pz = ASSETS.pitchZ * ASSETS.S;
+  const width = (cols - 1) * px + ASSETS.S;
+  return { rows, cols, px, pz, width };
+}
+
+/* Semiancho REAL de la multitud actual (radio del bunch + cuerpo) */
+function crowdHalf() {
+  const nEff = Math.max(displayCount, 1);
+  const R = clamp(0.17 * Math.sqrt(nEff), 0.25, 0.42);
+  return R + 0.19;
+}
+/* Límite lateral DINÁMICO con suelo garantizado de 0.5 para movilidad */
+function pxLimit() {
+  return Math.max(0.45, CONFIG.roadHalf - 0.05 - crowdHalf());
+}
+const setPX = v => { const L = pxLimit(); px = clamp(v, -L, L); };
+
+/* Formación sunflower precalculada (radio pequeño para no solaparse) */
+const offsets = [];
+for (let i = 0; i < CONFIG.maxRender; i++) {
+  if (i === 0) { offsets.push({ x: 0, z: 0 }); continue; }
+  const r = 0.27 * Math.sqrt(i) + 0.05;
+  const a = i * GOLD;
+  let x = Math.cos(a) * r * 0.95, z = Math.sin(a) * r * 0.7;
+  const m = Math.max(Math.abs(x) / 0.6, Math.abs(z) / (CONFIG.roadHalf * 0.42));
+  if (m > 1) { x /= m; z /= m; }
+  offsets.push({ x, z });
+}
+const CROWD_ORDER = offsets
+  .map((o, i) => ({ o, i }))
+  .sort((a, b) => a.o.z - b.o.z)
+  .map(v => v.i);
+
+/* ==================== 8. Input ==================== */
+let dragging = false, lastDragX = 0, keyL = false, keyR = false;
+
+canvas.addEventListener("pointerdown", e => { dragging = true; lastDragX = e.clientX; canvas.setPointerCapture(e.pointerId); });
+canvas.addEventListener("pointermove", e => {
+  if (!dragging || state !== S.PLAY) return;
+  const dx = e.clientX - lastDragX;
+  lastDragX = e.clientX;
+  setPX(px + dx * (2 * CONFIG.roadHalf) / (W * 0.7 * 0.72));
+});
+canvas.addEventListener("pointerup",     () => dragging = false);
+canvas.addEventListener("pointercancel", () => dragging = false);
+window.addEventListener("keydown", e => {
+  if (e.repeat) return;
+  if (e.key === "ArrowLeft"  || e.key === "a" || e.key === "A") keyL = true;
+  if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keyR = true;
+  if ((e.key === "Escape" || e.key === "p" || e.key === "P")) {
+    if (state === S.PLAY) setPaused(!paused);
+    else if (paused) setPaused(false);
+  }
+});
+window.addEventListener("keyup", e => {
+  if (e.key === "ArrowLeft"  || e.key === "a" || e.key === "A") keyL = false;
+  if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") keyR = false;
+});
+
+/* ==================== 9. Generación de nivel (aleatoria) ==================== */
+const goodGate = () => {
+  const r = Math.random();
+  if (r < 0.55)  { const v = Math.round(rand(LV.gateMin, LV.gateMax));              return { op:"add", v, label:"+" + v, good:true }; }
+  else           { const v = Math.random() < 0.55 ? 2 : 3;                            return { op:"mul", v, label:"x" + v, good:true }; }
+};
+const badGate = () => {
+  if (Math.random() < 0.72) { const v = Math.round(rand(LV.gateMin * 0.8, LV.gateMax * 1.25)); return { op:"sub", v, label:"-" + v, good:false }; }
+  const v = Math.random() < 0.7 ? 2 : 3;
+  return { op:"div", v, label:"÷" + v, good:false };
+};
+function makeGate(gd, x0, x1, z) {
+  const col = gd.good ? (gd.gold ? "250,204,21" : "34,197,94") : "239,68,68";
+  const c0 = (x0 === 0) ? 0.02 : x0;
+  const c1 = (x1 === 0) ? -0.02 : x1;
+  gates.push({ ...gd, x0, x1, c0, c1, z, consumed:false, hitT:0, col, fade: 1,
+    tex: bakeText(gd.label, 64, gd.good ? (gd.gold ? "#fff8d6" : "#eaffea") : "#ffe8e8", `rgba(${col},.9)`) });
+}
+/* Invariante del compositor: nada nuevo se solapa con lo que hay a la mano */
+function fits(x, half, z) {
+  for (const e of enemies) {
+    if (Math.abs(e.z - z) < 3.5 && Math.abs(e.x - x) < e.half + half + 0.12) return false;
+  }
+  return true;
+}
+/* CONTRATO DE ESQUIVABILIDAD: siempre tiene que quedar un corredor >= 0.6
+   entre el objeto y uno de los bordes de la carretera. */
+function corridorOK(x, half) {
+  const leftCorridor  = (x - half) - (-CONFIG.roadHalf);
+  const rightCorridor = CONFIG.roadHalf - (x + half);
+  return Math.max(leftCorridor, rightCorridor) >= 0.45;
+}
+/* Busca una x libre CON corredor válido; null si el patrón no cabe */
+function pickSpawnX(prefer, half, z) {
+  for (const cand of [prefer, -prefer, prefer * 0.5, -prefer * 0.5, 0]) {
+    const x = clamp(cand, -CONFIG.roadHalf * 0.65, CONFIG.roadHalf * 0.65);
+    if (fits(x, half, z) && corridorOK(x, half)) return x;
+  }
+  return null;
+}
+function spawnHorde(x, z, units, isBoss) {
+  const L = gridLayout(units);
+  const half = (L.cols - 1) / 2 * L.px + ASSETS.S / 2;
+  // CONTRATO: recolocar con corredor si es posible (solo no-jefe)
+  const sx = isBoss ? 0 : (pickSpawnX(x, half, z) ?? (fits(x, half, z) ? x : (fits(-x, half, z) ? -x : 0)));
+  const e = {
+    x: clamp(sx, -CONFIG.roadHalf * 0.7, CONFIG.roadHalf * 0.7), z,
+    units, max: units, alive: true, hitT: 0, isBoss: !!isBoss, kind: "horde",
+    cols: L.cols, sp: L.px,
+  };
+  e.half = half;
+  // ¿Es esquivable físicamente? (corredor real ≥ 0.45)
+  const cor = Math.max((e.x - half) + CONFIG.roadHalf, CONFIG.roadHalf - (e.x + half));
+  e.dodgeable = cor >= 0.45;
+  enemies.push(e);
+  return true;
+}
+/* Obstáculos inertes: 5 fichas del ASSETS — si no cabe con corredor, no nace */
+const OBSTACLES = ["crate", "rock", "barrel", "fence", "cone"];
+function spawnObstacle(x, z, kind) {
+  const f = ASSETS.obstacles[kind];
+  const units = randi(ASSETS.penalty.min, ASSETS.penalty.max);
+  const half = f.w * ASSETS.S / 2;
+  const sx = pickSpawnX(x, half, z);
+  if (sx === null) return false;
+  enemies.push({
+    x: sx, z, units, max: units, alive: true, hitT: 0, isBoss: false, kind, half,
+    w: f.w * ASSETS.S, h: f.h * ASSETS.S,
+    dragT: 0, dragDmg: 0,
+  });
+  return true;
+}
+
+function buildLevel(n) {
+  level = n;
+  LV = levelCfg(n);
+  gates.length = 0; enemies.length = 0; bullets.length = 0;
+  particles.length = 0; floats.length = 0;
+  scatterDecor();
+gates.length = 0; enemies.length = 0; bullets.length = 0;
+  particles.length = 0; floats.length = 0;
+  scatterDecor();
+
+  let z = 34;
+  let last = 0;
+  let eventNum = 0;
+  while (z < LV.len - 40) {
+    let kind;
+    do {
+      const r = Math.random();
+      kind = r < 0.38 ? 1 : r < 0.72 ? 2 : 3;
+    } while (kind === last && Math.random() < 0.7);
+    if (eventNum < 2 && kind !== 1) kind = 1;
+    last = kind;
+    eventNum++;
+
+    if (kind === 1) {
+      const doublePair = Math.random() < 0.45;
+      const gL = Math.random() < 0.5 ? goodGate() : badGate();
+      const gR = gL.good ? badGate() : goodGate();
+
+      if (eventNum <= 2) {
+        const conv = g => g.op === "mul"
+          ? { op: "add", v: LV.gateMax, label: "+" + LV.gateMax, good: true }
+          : g;
+        makeGate(conv(gL), -CONFIG.roadHalf, 0, z);
+        makeGate(conv(gR), 0, CONFIG.roadHalf, z);
+      } else {
+        makeGate(gL, -CONFIG.roadHalf, 0, z);
+        makeGate(gR, 0, CONFIG.roadHalf, z);
+      }
+
+    } else if (kind === 2) {
+
+      const early = z < LV.len * 0.25;
+      const softFactor = z < LV.len * 0.3 ? 0.55 : 1;
+      const u = clamp(Math.round(LV.hordeBase * softFactor * rand(0.7, 1.3)), 3, early ? 10 : 60);
+      spawnHorde(rand(-0.6, 0.6), z, u, false);
+      if (Math.random() < 0.3) {
+        spawnHorde(Math.random() < 0.5 ? rand(0.3, 0.65) : -rand(0.3, 0.65),
+          z + 8, clamp(Math.round(u * rand(0.55, 0.95)), 3, 60), false);
+      }
+    } else {
+      const n = randi(1, 3);
+      for (let c = 0; c < n; c++) {
+        spawnObstacle(rand(-0.55, 0.55) + c * 1.2, z + c * 3, OBSTACLES[randi(0, OBSTACLES.length - 1)]);
+      }
+      if (Math.random() < Math.min(0.6, 0.25 + level * 0.01)) {
+        spawnObstacle(rand(-0.45, 0.45), z + 8, OBSTACLES[randi(0, OBSTACLES.length - 1)]);
+      }
+    }
+    z += 18 + rand(0, 8);
+  }
+  if (Math.random() < 0.5) {
+    const gz = LV.len - 55;
+    const good = Math.random() < 0.5;
+    const g1 = { op:"add", v:Math.round(rand(25, 60)), label:"+", good:true, gold:true };
+    g1.label += g1.v;
+    const alt = good ? goodGate() : badGate();
+    makeGate(g1,  good ? 0 : -CONFIG.roadHalf, good ? CONFIG.roadHalf : 0, gz);
+    makeGate(alt, good ? -CONFIG.roadHalf : 0, good ? 0 : CONFIG.roadHalf, gz);
+  }
+  spawnHorde(0, LV.len - 18, LV.boss, true);
+  spawnPickups();
+}
+
+/* ==================== 10. Arma: disparo solo contra el jefe ==================== */
+function spawnBullet(x, z) {
+  let b = bullets.find(b => !b.active);
+  if (!b) { b = { x, z, active: false }; bullets.push(b); }
+  b.x = x; b.z = z; b.active = true;
+}
+
+function updateWeapon(dt) {
+  fireTimer -= dt;
+  if (fireTimer > 0) return;
+  let target = null;
+  for (const e of enemies) {
+    if (e.alive && e.isBoss && e.z > pz && (!target || e.z < target.z)) target = e;
+  }
+  if (!target || target.z - pz > CONFIG.shootRange) return;
+
+  const k = clamp(Math.round(count / 8), 1, LV.volley);
+  const nSold = Math.min(Math.floor(displayCount), CONFIG.maxRender);
+  for (let i = 0; i < k; i++) {
+    const off = offsets[Math.floor(rand(0, Math.max(1, nSold)))];
+    spawnBullet(px + off.x, pz + off.z);
+  }
+  fireTimer = CONFIG.fireInterval;
+  sfx.shoot();
+}
+
+function updateBullets(dt) {
+  const step = CONFIG.bulletSpeed * dt;
+  for (const b of bullets) {
+    if (!b.active) continue;
+    const bz0 = b.z;
+    b.z += step;
+    for (const e of enemies) {
+      if (!e.alive || !e.isBoss) continue;
+      if (b.z >= e.z - 0.3 && bz0 <= e.z + 1.8 && Math.abs(b.x - e.x) < 1.6) {
+        b.active = false;
+        hitEnemy(e, 1, b.x, b.z);
+        break;
+      }
+    }
+    if (b.z > pz + 90) b.active = false;
+  }
+}
+
+function hitEnemy(e, dmg, wx, wz) {
+  e.units -= dmg;
+  e.hitT = 1;
+  if (performance.now() - lastHitSnd > 50) { sfx.hitBoss(); lastHitSnd = performance.now(); }
+  const p = project(wx, wz);
+  addFloat(p.x, p.y - 30 * p.s, "-1", "#fca5a5", 14 * p.s + 6);
+  if (e.units <= 0) {
+    e.alive = false;
+    if (e.isBoss) explode(project(e.x - 1, e.z), 1.2);
+    explode(project(e.x, e.z), 1);
+    sfx.boom();
+    shakeT = Math.min(0.35, shakeT + (e.isBoss ? 0.35 : 0.2));
+  }
+}
+
+/* ==================== 11. Actualización ==================== */
+function update(dt) {
+  dt = Math.min(dt, 1 / 30);
+  pauseBtn.classList.toggle("hidden", state !== S.PLAY || paused);
+  if (paused) return;
+  time += dt;
+  displayCount = lerp(displayCount, count, Math.min(1, dt * 8));
+
+  if (state === S.TRANSITION) {
+    banner.t -= dt;
+    if (banner.t <= 0) { banner = null; state = S.PLAY; }
+    updateFx(dt);
+    return;
+  }
+
+  if (state !== S.PLAY) { updateFx(dt); return; }
+  prevPz = pz;
+  pz += LV.speed * dt;
+  const LIM = pxLimit();
+  px = clamp(px, -LIM, LIM);
+  if (keyL) setPX(px - LV.speed * 0.75 * dt);
+  if (keyR) setPX(px + LV.speed * 0.75 * dt);
+  px = clamp(px, -LIM, LIM);
+  for (const g of gates) {
+    if (g.consumed || prevPz >= g.z || pz < g.z) continue;
+    if (px >= g.c0 && px <= g.c1) {
+      g.consumed = true; g.hitT = 1;
+      if      (g.op === "add") setCount(count + g.v);
+      else if (g.op === "mul") setCount(count * g.v);
+      else if (g.op === "sub") setCount(count - g.v);
+      else setCount(Math.floor(count / g.v));
+      const p = project((g.x0 + g.x1) / 2, g.z);
+      addFloat(p.x, p.y - 70 * p.s, g.label, g.good ? "#4ade80" : "#f87171", 40 * p.s + 18);
+      g.good ? sfx.gateGood() : sfx.gateBad();
+      if (g.good) shakeT = Math.max(shakeT, 0.15);
+    }
+  }
+
+
+
+  for (const e of enemies) {
+    if (!e.alive || prevPz >= e.z || pz < e.z) continue;
+    if (!e.isBoss && Math.abs(px - e.x) > e.half + 0.22 + crowdHalf() * 0.45) continue;
+    if (e.kind === "horde") {
+      // CONTRATO: solo letal si es PEQUEÑA (<24) y físicamente esquivable.
+      // Las anchas sin corredor son muros de desgaste (nunca muerte injusta).
+      const lethal = e.units < 24 && e.dodgeable === true;
+      if (lethal && count < e.units * 0.6) {
+        setCount(0);
+      } else {
+        const dmg = Math.min(count - 1, Math.round(e.units * 0.85));
+        setCount(count - dmg);
+        addFloat(W / 2, H * 0.55, "-" + dmg, "#f87171", 34);
+        e.alive = false;
+        explode(project(e.x, e.z), 1);
+        sfx.boom();
+        shakeT = Math.max(shakeT, 0.3);
+      }
+    } else {
+      // OBSTÁCULO — golpe completo + arrastre visual de 0.4s (F4)
+      if (!e.dragT) {
+        const dmg = Math.max(2, Math.round(e.units * 0.9));
+        e.dragT = 0.4;
+        setCount(Math.max(1, count - dmg));
+        addFloat(W / 2, H * 0.5, "-" + dmg, "#fdba74", 30);
+        e.hitT = 1;
+        sfx.boom();
+        shakeT = Math.max(shakeT, 0.25);
+      }
+    }
+  }
+  // --- arrastre de obstáculos: al acabar el drag se rompen (SIN daño periódico)
+  for (const e of enemies) {
+    if (!e.dragT || e.dragT <= 0) continue;
+    e.dragT -= dt;
+    if (e.dragT <= 0) {
+      e.dragT = 0;
+      e.alive = false;
+      explode(project(e.x, e.z), 0.8);
+      sfx.boom();
+      shakeT = Math.max(shakeT, 0.15);
+    }
+  }
+
+  if (state === S.PLAY && pz >= LV.len) winLevel();
+  for (const p of pickups) {
+    if (p.taken || prevPz >= p.z || pz < p.z) continue;
+    if (Math.abs(px - p.x) < 0.55) {
+      p.taken = true;
+      setCount(count + p.v);
+      sfx.gateGood();
+      const pr = project(p.x, p.z);
+      addFloat(pr.x, pr.y - 40 * pr.s, "+" + p.v, "#fde047", 22 * pr.s + 14);
+    }
+  }
+
+  updateWeapon(dt);
+  updateBullets(dt);
+  updateFx(dt);
+  const shown = Math.max(0, Math.round(displayCount));
+  cnumEl.textContent = shown;
+  if (shown !== lastShownCount) {
+    lastShownCount = shown;
+    counterEl.classList.remove("pulse");
+    void counterEl.offsetWidth;
+    counterEl.classList.add("pulse");
+  }
+  barEl.style.width = clamp(pz / LV.len * 100, 0, 100) + "%";
+}
+
+function updateFx(dt) {
+  for (const g of gates) {
+    if (g.hitT > 0) g.hitT = Math.max(0, g.hitT - dt * 3);
+    if (g.consumed && g.fade > 0) g.fade = Math.max(0, g.fade - dt * 8);
+  }
+  for (const e of enemies) if (e.hitT > 0) e.hitT = Math.max(0, e.hitT - dt * 5);
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 700 * dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+  for (let i = floats.length - 1; i >= 0; i--) {
+    const f = floats[i];
+    f.life -= dt; f.y -= 60 * dt;
+    if (f.life <= 0) floats.splice(i, 1);
+  }
+  if (shakeT > 0) shakeT = Math.max(0, shakeT - dt);
+}
+
+function explode(sp, s) {
+  for (let i = 0; i < 16; i++) {
+    particles.push({
+      x: sp.x, y: sp.y,
+      vx: rand(-260, 260) * s, vy: rand(-420, -40) * s,
+      life: rand(0.35, 0.7), size: rand(3, 7) * (s * 0.6 + 0.5),
+      color: ["#ef4444", "#f97316", "#fca5a5"][Math.floor(rand(0, 3))],
+    });
+  }
+}
+function addFloat(x, y, text, color, size) {
+  if (floats.length > 40) floats.shift();
+  floats.push({ x, y, text, color, size, life: 0.7 });
+}
+
+/* ==================== 12. Render ==================== */
+function project(wx, wz) {
+  const d = Math.max(wz - (pz - CONFIG.camBack), CONFIG.camBack * 0.2);
+  const s = CONFIG.camDist / (CONFIG.camDist + d);
+  return { x: cx + wx * pxPerUnit * s, y: horizonY + (baseY - horizonY) * s, s };
+}
+
+/* Texto grande con contorno — glow PROHIBIDO en caliente (solo horneado) */
+function bigText(str, x, y, size, fill, glow) {
+  ctx.font = `900 ${size}px system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = size * 0.14;
+  ctx.strokeStyle = "rgba(6,10,22,.55)";
+  ctx.strokeText(str, x, y);
+  ctx.fillStyle = fill;
+  ctx.fillText(str, x, y);
+}
+/* Texto horneado (etiquetas de puertas): un canvas por etiqueta */
+let bakeC = document.createElement("canvas");
+function bakeText(str, size, fill, glowRGB) {
+  const m = bakeC.getContext("2d");
+  m.font = `900 ${size}px system-ui, sans-serif`;
+  const w = Math.ceil(m.measureText(str).width) + size * 1.6;
+  const h = Math.ceil(size * 2);
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const g = c.getContext("2d");
+  g.font = `900 ${size}px system-ui, sans-serif`;
+  g.textAlign = "center"; g.textBaseline = "middle"; g.lineJoin = "round";
+  g.lineWidth = size * 0.14; g.strokeStyle = "rgba(6,10,22,.55)";
+  g.shadowColor = glowRGB; g.shadowBlur = size * 0.32;
+  g.strokeText(str, w / 2, h / 2);
+  g.shadowBlur = 0;
+  g.fillStyle = fill;
+  g.fillText(str, w / 2, h / 2);
+  return { c, w, h, size };
+}
+function drawBakedText(t, x, y, dispSize) {
+  const s = dispSize / t.size;
+  ctx.drawImage(t.c, x - t.w / 2 * s, y - t.h / 2 * s, t.w * s, t.h * s);
+}
+
+function render() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.save();
+  if (shakeT > 0) ctx.translate(rand(-1, 1) * 8 * shakeT, rand(-1, 1) * 6 * shakeT);
+
+  drawBackground();
+  drawRoad();
+  drawVegetation();
+  drawFog();
+  drawFinish();
+  drawGates();
+  drawEnemies();
+  drawBullets();
+  drawPickups();
+  drawCrowd();
+  drawFx();
+  if (state === S.TRANSITION && banner) {
+    ctx.fillStyle = "rgba(8,12,30,.35)";
+    ctx.fillRect(0, 0, W, H);
+    const grow = 1 + Math.max(0, banner.t - 1.5) * 2.2;
+    bigText("NIVEL " + banner.n, cx, H * 0.4, Math.min(W * 0.11, 90) * grow, "#fff", "rgba(250,204,21,.9)");
+    if (banner.t < 0.9) bigText("¡A POR ELLO!", cx, H * 0.55, Math.min(W * 0.07, 56), "#4ade80");
+  }
+  ctx.restore();
+}
+
+/* --- Fondo con atmósfera por nivel --- */
+function drawBackground() {
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, W, horizonY + 2);
+  if (ATM.starsArr) {
+    for (const s of ATM.starsArr) {
+      ctx.globalAlpha = 0.35 + 0.65 * Math.abs(Math.sin(time * s.tw + s.ph));
+      ctx.fillStyle = "#e8f0ff";
+      ctx.fillRect(s.x * W, s.y * horizonY, 2, 2);
+    }
+    ctx.globalAlpha = 1;
+  }
+  if (ATM.sun) {
+    const sunX = W * 0.78, sunY = horizonY * 0.45;
+    const glow = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, W * 0.17);
+    glow.addColorStop(0, ATM.sun);
+    glow.addColorStop(0.3, ATM.sun.replace(")", ",.35)").replace("rgb(", "rgba(").replace("#", "rgba(255,243,196,.35)") === ATM.sun ? "rgba(255,243,196,.35)" : ATM.sun);
+    glow.addColorStop(1, "rgba(255,240,200,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, horizonY + 2);
+  } else if (ATM.moon) {
+    const mx = W * 0.22, my = horizonY * 0.4;
+    const glow = ctx.createRadialGradient(mx, my, 0, mx, my, W * 0.1);
+    glow.addColorStop(0, "rgba(210,225,255,.9)");
+    glow.addColorStop(1, "rgba(210,225,255,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, horizonY + 2);
+  }
+  ctx.fillStyle = ATM.cloud;
+  for (let i = 0; i < 7; i++) {
+    const cxc = (((time * (6 + i * 2.2)) + i * 265) % (W + 260)) - 130;
+    const cyc = horizonY * (0.16 + (i % 4) * 0.16) + Math.sin(i * 2.2) * 7;
+    cloud(cxc, cyc, 26 + (i % 3) * 13);
+  }
+  hills(H * 0.045, ATM.hills[1], 1.0);
+  hills(H * 0.028, ATM.hills[0], 1.9);
+  ctx.fillStyle = grassGrad;
+  ctx.fillRect(0, horizonY, W, H - horizonY);
+  ctx.fillStyle = "rgba(0,0,0,.05)";
+  let sy = horizonY, h2 = 4;
+  while (sy < H) { sy += h2; h2 *= 1.16; ctx.fillRect(0, sy - h2 * 0.4, W, h2 * 0.4); }
+}
+function cloud(x, y, r) {
+  ctx.beginPath();
+  ctx.ellipse(x, y, r, r * 0.45, 0, 0, TAU);
+  ctx.ellipse(x + r * 0.7, y + r * 0.15, r * 0.6, r * 0.32, 0, 0, TAU);
+  ctx.ellipse(x - r * 0.7, y + r * 0.2, r * 0.55, r * 0.3, 0, 0, TAU);
+  ctx.fill();
+}
+function hills(amp, color, freq) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, horizonY + 2);
+  for (let sx = 0; sx <= W; sx += 22) {
+    const yy = horizonY - Math.abs(Math.sin(sx * 0.013 * freq + pz * freq * 0.012)) * amp;
+    ctx.lineTo(sx, yy);
+  }
+  ctx.lineTo(W, horizonY + 2);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/* --- Carretera --- */
+const s0 = d => CONFIG.camDist / (CONFIG.camDist + d);
+function drawRoad() {
+  const sFar = s0(70 + CONFIG.camBack);
+  const wFar = CONFIG.roadHalf * pxPerUnit * sFar;
+  const sBottom = (H - horizonY) / (baseY - horizonY);
+  const wNear = CONFIG.roadHalf * pxPerUnit * sBottom;
+
+  ctx.beginPath();
+  ctx.moveTo(cx - wNear, H);
+  ctx.lineTo(cx - wFar, horizonY);
+  ctx.lineTo(cx + wFar, horizonY);
+  ctx.lineTo(cx + wNear, H);
+  ctx.closePath();
+  ctx.fillStyle = roadGrad;
+  ctx.fill();
+
+  ctx.lineWidth = Math.max(2, W * 0.006);
+  ctx.strokeStyle = "rgba(255,255,255,.5)";
+  [-1, 1].forEach(sd => {
+    ctx.beginPath();
+    ctx.moveTo(cx + sd * wNear, H);
+    ctx.lineTo(cx + sd * wFar, horizonY);
+    ctx.stroke();
+  });
+
+  ctx.strokeStyle = "rgba(255,255,255,.45)";
+  ctx.lineWidth = Math.max(1.5, W * 0.004);
+  ctx.beginPath();
+  ctx.moveTo(cx, baseY - (baseY - horizonY) * 0.18);
+  ctx.lineTo(cx, H);
+  ctx.stroke();
+
+  const gap = 7;
+  for (let i = 0; i < 10; i++) {
+    const wz = Math.floor(pz / gap) * gap + i * gap;
+    if (wz < pz - CONFIG.camBack) continue;
+    const a = project(0, wz), b = project(0, wz + 2.4);
+    ctx.strokeStyle = "rgba(255,255,255,.42)";
+    ctx.lineWidth = Math.max(1.5, W * 0.004 * a.s);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+  }
+}
+
+/* --- Vegetación: se regenera aleatoria en cada nivel --- */
+let VEG = [];
+function scatterDecor() {
+  const r = CONFIG.roadHalf;
+  VEG = [];
+  for (let i = 0; i < 90; i++) VEG.push({ t: 0, wx: (i % 2 ? 1 : -1) * (r + 1.2 + Math.random() * 5), wz: 14 + i * 11 + Math.random() * 12, s: 0.8 + Math.random() * 1.2 });
+  for (let i = 0; i < 70; i++) VEG.push({ t: 1, wx: (i % 2 ? 1 : -1) * (r + 0.25 + Math.random() * 1.4), wz: 10 + i * 14 + Math.random() * 10, s: 0.65 + Math.random() * 0.7 });
+  if (ATM.flowers) for (let i = 0; i < 130; i++) VEG.push({
+    t: 2, wx: (i % 2 ? 1 : -1) * (r + 0.5 + Math.random() * 4.5), wz: 6 + i * 7.5 + Math.random() * 8,
+    c: ["#ffffff", "#ffd54a", "#ff8fab", "#c084fc", "#7dd3fc"][i % 5],
+  });
+  VEG.sort((a, b) => b.wz - a.wz);
+}
+function drawVegetation() {
+  const [hue, light] = ATM.crowns;
+  for (const v of VEG) {
+    const wzRel = v.wz - (pz - CONFIG.camBack);
+    if (wzRel < -3) break;
+    if (wzRel > 85) continue;
+    const p = project(v.wx, v.wz);
+    const u = pxPerUnit * p.s;
+    if (v.t === 2) {
+      ctx.fillStyle = v.c;
+      const r = Math.max(1, 0.05 * u);
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.fill();
+    } else if (v.t === 1) {
+      const s = 0.32 * u * v.s;
+      ctx.fillStyle = `hsl(${hue},36%,${light - 4}%)`;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y - s * 0.4, s * 1.1, s * 0.7, 0, 0, TAU);
+      ctx.ellipse(p.x + s * 0.7, p.y - s * 0.25, s * 0.7, s * 0.5, 0, 0, TAU);
+      ctx.fill();
+    } else {
+      const s = 0.55 * u * v.s;
+      ctx.fillStyle = "#6b4a2f";
+      ctx.fillRect(p.x - s * 0.09, p.y - s * 0.95, s * 0.18, s * 0.95);
+      ctx.fillStyle = `hsl(${hue},38%,${light + Math.floor(v.s * 4) - 4}%)`;
+      ctx.beginPath();
+      ctx.ellipse(p.x, p.y - s * 1.3, s * 0.58, s * 0.52, 0, 0, TAU);
+      ctx.ellipse(p.x - s * 0.32, p.y - s * 0.98, s * 0.36, s * 0.3, 0, 0, TAU);
+      ctx.ellipse(p.x + s * 0.3, p.y - s * 1.02, s * 0.33, s * 0.28, 0, 0, TAU);
+      ctx.fill();
+    }
+  }
+}
+function drawFog() {
+  ctx.fillStyle = fogGrad;
+  ctx.fillRect(0, horizonY - 22, W, 102);
+}
+
+/* --- Meta --- */
+function drawFinish() {
+  if (LV.len > pz + 90) return;
+  const cols = 8, rh = CONFIG.roadHalf;
+  for (let row = 0; row < 2; row++) {
+    for (let c = 0; c < cols; c++) {
+      const z0 = LV.len + row * 0.9;
+      const x0 = -rh + (c / cols) * 2 * rh, x1 = -rh + ((c + 1) / cols) * 2 * rh;
+      const p1 = project(x0, z0), p2 = project(x1, z0), p3 = project(x1, z0 + 0.9), p4 = project(x0, z0 + 0.9);
+      ctx.fillStyle = (row + c) % 2 === 0 ? "#f8fafc" : "#0f172a";
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+  const pm = project(0, LV.len - 4);
+  bigText("🏁 META", pm.x, pm.y - Math.max(18, 0.85 * pxPerUnit * pm.s) * 1.6, Math.max(18, 0.85 * pxPerUnit * pm.s), "#fff", "rgba(250,204,21,.85)");
+}
+
+/* --- Puertas: muro redondeado — al cruzarlas desaparecen al instante --- */
+function drawGates() {
+  const sorted = gates.slice().sort((a,b) => b.z - a.z);
+  for (const g of sorted) {
+    if (g.consumed && pz >= g.z) continue;
+    const d = g.z - (pz - CONFIG.camBack);
+    if (d < 0.2 || d > 120) continue;
+    let alpha = clamp((80 - d) / 12, 0, 1);
+    if (g.consumed) alpha *= g.fade;
+    if (alpha <= 0.01) continue;
+    const p1 = project(g.x0, g.z), p2 = project(g.x1, g.z),
+          p3 = project(g.x1, g.z + 3.2), p4 = project(g.x0, g.z + 3.2);
+    const a = (g.consumed ? 0.12 : 0.28) * alpha;
+    const ph = ASSETS.gate.wallH * ASSETS.S * pxPerUnit * p1.s;
+    const bw = Math.max(2, 0.07 * pxPerUnit * p1.s);
+    const rad = Math.min(ph * 0.16, (p2.x - p1.x) / 2);
+    if (!g.consumed) {
+      ctx.fillStyle = `rgba(${g.col},${alpha * 0.16})`;
+      ctx.beginPath();
+      ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y); ctx.lineTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = `rgba(${g.col},${a})`;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(p1.x, p1.y - ph, p2.x - p1.x, ph, rad);
+    else ctx.rect(p1.x, p1.y - ph, p2.x - p1.x, ph);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(${g.col},${alpha * (g.consumed ? 0.25 : 0.95)})`;
+    ctx.lineWidth = bw;
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(p1.x, p1.y - ph, p2.x - p1.x, ph, rad);
+    else ctx.rect(p1.x, p1.y - ph, p2.x - p1.x, ph);
+    ctx.stroke();
+    const pop = g.hitT > 0 ? 1 + g.hitT * 0.5 : 1;
+    const size = ASSETS.gate.fontH * ASSETS.S * pxPerUnit * p1.s * pop;
+    drawBakedText(g.tex, (p1.x + p2.x) / 2, p1.y - ph * 0.5, size);
+  }
+}
+
+/* --- Hordas: rejilla dinámica ajustada al número real de figuras --- */
+function drawEnemies() {
+  const sortedE = enemies.slice().sort((a,b) => b.z - a.z);
+  for (const e of sortedE) {
+    const d = e.z - (pz - CONFIG.camBack);
+    if (!e.alive || d < -2 || d > 80) continue;
+    const alpha = clamp((80 - d) / 12, 0, 1);
+
+    if (e.kind !== "horde") { drawObstacle(e, alpha); continue; }
+
+    const su = e.isBoss ? ASSETS.soldier.u : ASSETS.soldier.u;
+    const shown = e.units;
+    const p0 = project(e.x, e.z);
+    const u = su * pxPerUnit * p0.s * (1 + e.hitT * 0.12);
+    const rows = clamp(Math.ceil(shown / ASSETS.maxCols), 1, 5);
+    const cols = Math.ceil(shown / rows);
+    const sp = ASSETS.pitchX * ASSETS.S;
+
+    ctx.globalAlpha = alpha;
+    for (let i = 0; i < shown; i++) {
+      const col = i % cols, row = Math.floor(i / cols);
+      const rowCols = Math.min(cols, shown - row * cols);
+      const wx = e.x + (col - (rowCols - 1) / 2) * sp;
+      const wz = e.z + row * 0.28;
+      const p = project(wx, wz);
+      drawSprite(p.x, p.y, su * pxPerUnit * p.s, e.isBoss ? 7 : 4 + (i % 3), time * 11 + i * 1.9, 1);
+    }
+    const size = Math.max(12, ASSETS.numFont * ASSETS.S * pxPerUnit * p0.s * (1 + e.hitT * 0.12));
+    const tagY = p0.y - ASSETS.soldier.u * pxPerUnit * p0.s * 2.3 - size * 0.4;
+    bigText(e.units, p0.x, tagY, size, e.isBoss ? "#fecaca" : "#fca5a5");
+    if (e.isBoss) bigText("¡JEFE!", p0.x, tagY - size * 0.95, size * 0.45, "#fde047");
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* Obstáculos inertes: 5 siluetas con dimensiones en UNIDADES de mundo coherentes */
+function drawObstacle(e, alpha) {
+  if (e.dragT > 0) {
+    // efecto visual de arrastre: parpadeo rápido y vibración en x
+    alpha *= (0.4 + 0.6 * Math.abs(Math.sin(time * 30)));
+    e.x += Math.sin(time * 50) * 0.02; // vibración lateral
+  }
+  const p0 = project(e.x, e.z);
+  const wU = pxPerUnit * p0.s;
+  const pulse = 1 + e.hitT * 0.15;
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "rgba(0,0,0,.22)";
+  ctx.beginPath();
+  ctx.ellipse(p0.x, p0.y, e.w * wU * 0.45, e.w * wU * 0.12, 0, 0, TAU);
+  ctx.fill();
+  ctx.lineJoin = "round";
+
+  if (e.kind === "crate") {
+    const bw = e.w * wU, bh = e.h * wU;
+    const bx = p0.x - bw / 2, by = p0.y - bh;
+    ctx.fillStyle = "#a06a32";
+    ctx.strokeStyle = "#6d4419";
+    ctx.lineWidth = Math.max(1.5, 0.05 * wU);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, wU * 0.05);
+    else ctx.rect(bx, by, bw, bh);
+    ctx.fill(); ctx.stroke();
+    ctx.lineWidth = Math.max(1, 0.03 * wU);
+    ctx.beginPath();
+    ctx.moveTo(bx + bw * 0.08,  by + bh * 0.34); ctx.lineTo(bx + bw * 0.92,  by + bh * 0.34);
+    ctx.moveTo(bx + bw * 0.08,  by + bh * 0.67); ctx.lineTo(bx + bw * 0.92,  by + bh * 0.67);
+    ctx.moveTo(bx + bw * 0.1,   by + bh * 0.92); ctx.lineTo(bx + bw * 0.9,   by + bh * 0.09);
+    ctx.stroke();
+  } else if (e.kind === "rock") {
+    const w = e.w * wU, h = e.h * wU;
+    ctx.fillStyle = "#8a8f98";
+    ctx.strokeStyle = "#54595f";
+    ctx.lineWidth = Math.max(1.5, 0.05 * wU);
+    ctx.beginPath();
+    ctx.moveTo(p0.x - w / 2, p0.y);
+    ctx.lineTo(p0.x - w / 2 + w * 0.12, p0.y - h * 0.75);
+    ctx.lineTo(p0.x - w * 0.06,   p0.y - h);
+    ctx.lineTo(p0.x + w * 0.3,    p0.y - h * 0.9);
+    ctx.lineTo(p0.x + w / 2,      p0.y - h * 0.3);
+    ctx.lineTo(p0.x + w * 0.4,    p0.y);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,.2)";
+    ctx.beginPath();
+    ctx.ellipse(p0.x - w * 0.12, p0.y - h * 0.72, w * 0.16, h * 0.12, -0.3, 0, TAU);
+    ctx.fill();
+  } else if (e.kind === "barrel") {
+    const bw = e.w * wU, bh = e.h * wU;
+    const bx = p0.x - bw / 2, by = p0.y - bh;
+    ctx.fillStyle = "#e28743";
+    ctx.strokeStyle = "#9c5420";
+    ctx.lineWidth = Math.max(1.5, 0.05 * wU);
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(bx, by, bw, bh, bw * 0.32);
+    else ctx.rect(bx, by, bw, bh);
+    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = "rgba(120,55,10,.8)";
+    ctx.lineWidth = Math.max(1, 0.04 * wU);
+    ctx.beginPath();
+    ctx.moveTo(bx, by + bh * 0.3); ctx.lineTo(bx + bw, by + bh * 0.3);
+    ctx.moveTo(bx, by + bh * 0.62); ctx.lineTo(bx + bw, by + bh * 0.62);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,.2)";
+    ctx.beginPath();
+    ctx.ellipse(bx + bw * 0.3, by + bh * 0.5, bw * 0.12, bh * 0.3, 0, 0, TAU);
+    ctx.fill();
+  } else if (e.kind === "fence") {
+    const w = e.w * wU * 0.75, h = e.h * wU;
+    const bx = p0.x - w / 2, by = p0.y - h - 0.16 * wU;
+    ctx.strokeStyle = "#6b7280";
+    ctx.lineWidth = Math.max(1.5, 0.05 * wU);
+    ctx.beginPath();
+    ctx.moveTo(bx + w * 0.12, p0.y); ctx.lineTo(bx + w * 0.12, by + h);
+    ctx.moveTo(bx + w * 0.88, p0.y); ctx.lineTo(bx + w * 0.88, by + h);
+    ctx.stroke();
+    ctx.fillStyle = "#e2e8f0";
+    ctx.strokeStyle = "#6b7280";
+    roundRectInto(ctx, bx, by, w, h, wU * 0.03);
+    ctx.fill(); ctx.stroke();
+    ctx.save();
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(bx, by, w, h, wU * 0.03);
+    else ctx.rect(bx, by, w, h);
+    ctx.clip();
+    ctx.fillStyle = "#ef4444";
+    for (let sxx = 0; sxx < w; sxx += 0.22 * wU) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(bx + sxx, by + h);
+      ctx.lineTo(bx + sxx + 0.11 * wU * 0.75, by + h);
+      ctx.lineTo(bx + sxx + 0.11 * wU * 0.75 + h * 0.4, by);
+      ctx.lineTo(bx + sxx + h * 0.4, by);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  } else {
+
+    const w = e.w * wU, h = e.h * wU;
+    ctx.fillStyle = "#f97316";
+    ctx.strokeStyle = "#b4490a";
+    ctx.lineWidth = Math.max(1.5, 0.04 * wU);
+    ctx.beginPath();
+    ctx.moveTo(p0.x - w * 0.5, p0.y);
+    ctx.lineTo(p0.x - w * 0.16, p0.y - h);
+    ctx.lineTo(p0.x + w * 0.16, p0.y - h);
+    ctx.lineTo(p0.x + w * 0.5, p0.y);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = "#fff7ed";
+    ctx.beginPath();
+    ctx.moveTo(p0.x - w * 0.26, p0.y - h * 0.42);
+    ctx.lineTo(p0.x + w * 0.26, p0.y - h * 0.42);
+    ctx.lineTo(p0.x + w * 0.21, p0.y - h * 0.6);
+    ctx.lineTo(p0.x - w * 0.21, p0.y - h * 0.6);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* --- Balas --- */
+function drawBullets() {
+  ctx.fillStyle = "#fde047";
+  for (const b of bullets) {
+    if (!b.active) continue;
+    const p = project(b.x, b.z);
+    const r = Math.max(1.6, 0.09 * pxPerUnit * p.s);
+    ctx.globalAlpha = clamp((90 - (b.z - pz)) / 20, 0, 1);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y - 28 * p.s, r, 0, TAU);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* --- Coleccionable: mini-soldado azul que "se une" — anillo dorado --- */
+function drawPickups() {
+  for (const p of pickups) {
+    if (p.taken) continue;
+    const d = p.z - (pz - CONFIG.camBack);
+    if (d < -1 || d > 80) continue;
+    const pr = project(p.x, p.z);
+    const sW = pxPerUnit * pr.s;
+    ctx.globalAlpha = clamp((80 - d) / 12, 0, 1);
+    const ringR = ASSETS.pickup.ring * ASSETS.S * sW * (1.05 + 0.12 * Math.sin(time * 5 + p.z));
+    ctx.fillStyle = "rgba(250,204,21,.3)";
+    ctx.beginPath();
+    ctx.ellipse(pr.x, pr.y, ringR, ringR * 0.4, 0, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(253,224,71,.85)";
+    ctx.lineWidth = Math.max(1.5, 0.045 * sW);
+    ctx.stroke();
+    drawSprite(pr.x, pr.y - 0.02 * sW, ASSETS.pickup.u * ASSETS.S, 0, TAU * 0.25, 1);
+    ctx.fillStyle = "rgba(255,255,255,.85)";
+    for (let k = 0; k < 3; k++) {
+      const a = time * 2.4 + k * 2.1 + p.z;
+      const sx2 = pr.x + Math.cos(a) * ringR * 1.15;
+      const sy2 = pr.y - 0.3 * sW + Math.sin(a) * 0.1 * sW;
+      const dot = Math.max(1, 0.035 * sW);
+      ctx.beginPath(); ctx.arc(sx2, sy2, dot, 0, TAU); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+/* --- Multitud del jugador — retícula ÚNICA: paso 0.24 mundo ---
+   Con hasta 60 figuras: máx 7 filas × 12 columnas ~ 1.6 ancho, sin montones.
+   Cada fila STAGGER media pie + jitter; todos los sprites a la ficha de escala. */
+function drawCrowd() {
+  const nDraw = Math.min(Math.floor(Math.max(displayCount, count > 0 ? 1 : 0)), CONFIG.maxRender);
+  if (nDraw <= 0) return;
+  const edge = CONFIG.roadHalf - 0.12;
+
+  const nEff = Math.max(displayCount, 1);
+  const R = clamp(0.17 * Math.sqrt(nEff), 0.25, 0.42);
+  const U = ASSETS.soldier.u * clamp(Math.sqrt(38 / nEff), 0.55, 1);
+
+  for (let i = 0; i < nDraw; i++) {
+    const rr = R * Math.sqrt((i + 0.6) / Math.max(nDraw, 0.9));
+    const aa = i * GOLD + (i % 4) * 0.14;
+    let lx = Math.cos(aa) * rr;
+    let lz = Math.sin(aa) * rr * 0.55;
+    lx += (((i * 0.217) % 1) - 0.5) * 0.07;
+    lz += (((i * 0.501) % 1) - 0.5) * 0.12;
+
+    const wx = clamp(px + lx, -edge, edge);
+    const wz = pz + clamp(lz, -1.35, 1.2);
+    const p = project(wx, wz);
+    const d = wz - (pz - CONFIG.camBack);
+    if (d > 80) continue;
+    const born = clamp((displayCount - i) * 0.9, 0, 1);
+    drawSprite(p.x, p.y, U * pxPerUnit * p.s, i % 4, time * 10 + i * 0.8, 0.3 + 0.7 * born);
+  }
+}
+
+function drawFx() {
+  for (const p of particles) {
+    ctx.globalAlpha = clamp(p.life * 2.5, 0, 1);
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, TAU); ctx.fill();
+  }
+  for (const f of floats) {
+    const pop = 1 + Math.max(0, f.life - 0.55) * 2.4;
+    ctx.globalAlpha = clamp(f.life * 1.6, 0, 1);
+    bigText(f.text, f.x, f.y, f.size * pop, f.color);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ==================== 13. Flujo de partida y niveles ==================== */
+function startLevel(n) {
+  initAudio();
+  sfx.start();
+  paused = false;
+  applyAmbiance(n);
+  buildLevel(n);
+  resetRun();
+  state = S.TRANSITION;
+  banner = { n, t: 1.8 };
+  ov.classList.add("hidden");
+  mapEl.classList.add("hidden");
+}
+
+function resetRun() {
+  px = 0; pz = 0; prevPz = 0;
+  count = CONFIG.startCount; displayCount = count;
+  fireTimer = 0; lastHitSnd = 0; shakeT = 0;
+  lastShownCount = -1;
+  bullets.length = 0; particles.length = 0; floats.length = 0;
+}
+
+function winLevel() {
+  state = S.WIN;
+  sfx.win();
+  explode(project(px, pz), 1.4);
+  progress.best[level] = Math.max(progress.best[level] || 0, count);
+  progress.unlocked = Math.min(Math.max(progress.unlocked, level + 1), N_LEVELS);
+  saveProgress();
+  const last = level >= N_LEVELS;
+  showOverlay(
+    last ? "🏆 ¡CAMPAÑA COMPLETA!" : `¡NIVEL ${level} SUPERADO!`,
+    `Meta alcanzada con <b style="color:#7ef0a2">${count}</b> tropas${progress.best[level] ? ` · récord: ${progress.best[level]}` : ""}`,
+    last ? `🔄&nbsp;REPETIR NIVEL ${N_LEVELS}` : "SIGUIENTE&nbsp;▶",
+    last ? () => startLevel(N_LEVELS) : () => runWipe(() => startLevel(level + 1)),
+    "MAPA", openMap, "win"
+  );
+}
+
+function lose() {
+  if (state !== S.PLAY) return;
+  state = S.LOSE;
+  sfx.lose();
+  shakeT = 0.5;
+  showOverlay("SE ACABÓ", `Tu tropa llegó a <b style="color:#fca5a5">0</b> en el nivel ${level}… ¡elige mejor puertas!`,
+    "REINTENTAR&nbsp;↻", () => runWipe(() => startLevel(level)), "MAPA", openMap, "lose");
+}
+
+/* Cortinilla al cambiar de nivel */
+function runWipe(cb) {
+  wipe.classList.remove("on");
+  void wipe.offsetWidth;
+  wipe.classList.add("on");
+  setTimeout(cb, 300);
+}
+
+/* ==================== PAUSA ==================== */
+const pauseBtn = document.getElementById("pauseBtn");
+let paused = false;
+function setPaused(v) {
+  if (state !== S.PLAY) paused = false;
+  paused = v && state === S.PLAY;
+  if (paused) {
+    showOverlay("PAUSA", `Nivel <b>${level}</b> en espera`, "▶&nbsp;&nbsp;CONTINUAR",
+      () => { paused = false; ov.classList.add("hidden"); },
+      "MAPA", () => { paused = false; state = S.TITLE; openMap(); });
+  } else {
+    ov.classList.add("hidden");
+  }
+}
+pauseBtn.onclick = () => { initAudio(); setPaused(!paused); };
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && state === S.PLAY) setPaused(true);
+});
+
+/* ==================== LOGIN / PERFILES ==================== */
+const loginEl   = document.getElementById("login");
+const userListEl = document.getElementById("userList");
+const ovBtn3    = document.getElementById("ovBtn3");
+ovBtn3.onclick = openLogin;
+function openLogin() {
+  ov.classList.add("hidden");
+  mapEl.classList.add("hidden");
+  renderUserList();
+  loginEl.classList.remove("hidden");
+}
+function closeLogin() {
+  loginEl.classList.add("hidden");
+  showTitle();
+}
+function renderUserList() {
+  userListEl.innerHTML = "";
+  Object.keys(profiles).forEach(nm => {
+    if (nm === "__invitado" && !profiles["__invitado"]) return;
+    const label = nm === "__invitado" ? "Invitado" : nm;
+    const b = document.createElement("button");
+    b.className = "userChip";
+    b.innerHTML = `<span>${label}${nm === currentUser ? " ✅" : ""}</span><small>${profiles[nm].unlocked - 1}/${N_LEVELS}</small>`;
+    b.onclick = () => { switchUser(nm); closeLogin(); };
+    userListEl.appendChild(b);
+  });
+}
+document.getElementById("loginGo").onclick = () => {
+  const name = (document.getElementById("nameInput").value || "").replace(/[<>&"']/g, "").trim().slice(0, 12) || "Jugador";
+  document.getElementById("nameInput").value = "";
+  switchUser(name);
+  closeLogin();
+};
+document.getElementById("loginGuest").onclick = () => { switchUser("__invitado"); closeLogin(); };
+document.getElementById("loginBack").onclick = () => {
+  loginEl.classList.add("hidden");
+  state = S.TITLE;
+  showTitle();
+};
+
+/* ==================== MONEDAS DORADAS coleccionables ==================== */
+let pickups = [];
+function spawnPickups() {
+  pickups.length = 0;
+  const nPick = randi(4, 7);
+  const z0 = 40, zEnd = Math.max(z0 + 60, LV.len - 60);
+  for (let i = 0; i < nPick; i++) {
+    pickups.push({
+      x: rand(-CONFIG.roadHalf * 0.5, CONFIG.roadHalf * 0.5),
+      z: z0 + (zEnd - z0) * ((i + 0.5) / nPick) + rand(-6, 6),
+      v: 3 + ((i * 7) % 7),
+      taken: false,
+    });
+  }
+}
+
+/* ==================== 14. Overlays y mapa ==================== */
+const ov       = document.getElementById("overlay");
+const ovTitle  = document.getElementById("ovTitle");
+const ovSub    = document.getElementById("ovSub");
+const ovBtn    = document.getElementById("ovBtn");
+const ovBtn2   = document.getElementById("ovBtn2");
+const mapEl    = document.getElementById("map");
+const nodesEl  = document.getElementById("nodes");
+const mapSvg   = document.getElementById("mapSvg");
+const wipe     = document.getElementById("wipe");
+
+let actMainBtn = null, actSecBtn = null;
+function showOverlay(title, sub, mainLabel, mainFn, secLabel, secFn, cls) {
+  ovTitle.textContent = title;
+  ovTitle.className = cls || "";
+  ovSub.innerHTML = sub;
+  ovBtn.innerHTML = mainLabel;
+  ovBtn3.style.display = "none";
+  actMainBtn = mainFn;
+  if (secFn) {
+    ovBtn2.style.display = "";
+    ovBtn2.innerHTML = secLabel;
+    actSecBtn = secFn;
+  } else { ovBtn2.style.display = "none"; actSecBtn = null; }
+  ov.classList.remove("hidden");
+}
+ovBtn.onclick  = () => actMainBtn && actMainBtn();
+ovBtn2.onclick = () => actSecBtn && actSecBtn();
+
+/* Mapa de niveles: camino serpenteante con 15 nodos */
+function nodePos(n) {
+  const row = Math.floor((n - 1) / 5);
+  let col = (n - 1) % 5;
+  if (row % 2 === 1) col = 4 - col;
+  return { x: 12 + col * 19, y: 5.5 + row * 7.45 };
+}
+function openMap() {
+  ov.classList.add("hidden");
+  buildMap();
+  mapEl.classList.remove("hidden");
+  state = S.MAP;
+}
+function buildMap() {
+  nodesEl.innerHTML = "";
+  const pts = [];
+  for (let n = 1; n <= 15; n++) pts.push(nodePos(n));
+  mapSvg.innerHTML = `<polyline points="${pts.map(p => p.x + "," + p.y).join(" ")}"
+    fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.4" stroke-dasharray="2 2.4"
+    stroke-linecap="round" vector-effect="non-scaling-stroke"/>`;
+  for (let n = 1; n <= N_LEVELS; n++) {
+    const p = nodePos(n);
+    const el = document.createElement("button");
+    el.className = "node " + (n < progress.unlocked ? "done" : (n === progress.unlocked ? "cur" : "lock"));
+    if (n < progress.unlocked) {
+      el.textContent = "✓";
+      el.innerHTML += `<small>🏆 ${progress.best[n] || "—"}</small>`;
+    } else if (n === progress.unlocked) {
+      el.textContent = n;
+      el.innerHTML += `<small>NIVEL ${n}</small>`;
+    } else {
+      el.textContent = "🔒";
+      el.disabled = true;
+    }
+    el.style.left = p.x + "%";
+    el.style.top  = p.y + "%";
+    if (n <= progress.unlocked) el.onclick = () => runWipe(() => startLevel(n));
+    nodesEl.appendChild(el);
+  }
+}
+document.getElementById("mapBack").onclick = () => {
+  mapEl.classList.add("hidden");
+  showTitle();
+  state = S.TITLE;
+};
+
+function showTitle() {
+  const cur = currentLevel();
+  ovBtn3.innerHTML = "👤&nbsp;" + guestLabel();
+  ovBtn3.style.display = "inline-block";
+  showOverlay(
+    "CROWD RUNNER",
+    `Campaña de ${N_LEVELS} niveles · desbloqueados: <b style="color:#fde047">${Math.min(progress.unlocked, N_LEVELS)}</b>`,
+    "▶&nbsp;&nbsp;JUGAR", () => startLevel(cur),
+    "MAPA", openMap
+  );
+}
+
+/* ==================== 15. Bucle principal ==================== */
+loadProgress();
+applyAmbiance(1);
+buildLevel(1);
+resetRun();
+showTitle();
+
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
+}
+
+let lastT = performance.now();
+function frame(now) {
+  const dt = Math.min((now - lastT) / 1000, 0.05);
+  lastT = now;
+  update(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+</script>
+</body>
+</html>
